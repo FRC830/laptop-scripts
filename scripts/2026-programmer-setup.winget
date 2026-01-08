@@ -1,0 +1,142 @@
+# yaml-language-server: $schema=https://aka.ms/configuration-dsc-schema/0.2
+
+# Requires Microsoft VC Redist 2015+ x64: winget install --id Microsoft.VCRedist.2015+.x64 -e
+properties:
+  configurationVersion: 0.2
+  metadata:
+    author: Nick McGill (FRC 830 Mentor)
+    description: Installs required software for FRC 830 team programmers
+    version: 2026.beta.2026.01.08
+
+  resources:
+    # Git
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: git
+      directives:
+        description: Installs Git from winget
+        securityContext: elevated
+      settings:
+        id: Git.Git
+        source: winget
+
+    # Rev Hardware Client
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: rev-hardware-client
+      directives:
+        description: Installs REV Hardware Client from winget
+        securityContext: elevated
+      settings:
+        id: REVRobotics.REVHardwareClient
+        source: winget
+
+    # Phoenix Tuner X
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: phoenix-tuner
+      directives:
+        description: Installs Phoenix Tuner from MS Store
+      settings:
+        id: 9NVV4PWDW27Z
+        source: msstore
+
+    # FRC PathPlanner
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: frc-pathplanner
+      directives:
+        description: Installs FRC PathPlanner from MS Store
+      settings:
+        id: 9NQBKB5DW909
+        source: msstore
+
+    # Raspberry Pi Imager
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: raspberry-pi-imager
+      directives:
+        description: Installs Raspberry Pi Imager from winget
+        securityContext: elevated
+      settings:
+        id: RaspberryPiFoundation.RaspberryPiImager
+        source: winget
+
+    # NI Package Manager
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: ni-package-manager
+      directives:
+        description: Installs NI Package Manager from winget
+        securityContext: elevated
+      settings:
+        id: NI.ni-packagemanager
+        source: winget
+
+    # Git Config
+    - resource: PSDscResources/Script
+      id: git-config
+      dependsOn:
+        - git
+      directives:
+        description: Configures Git with placeholder user name and email for FRC 830
+        securityContext: elevated
+      settings:
+        GetScript: |
+          return @{
+            Result = (git config --global user.email) -ne $null
+          }
+        SetScript: |
+          git config --global user.email "ratpack.student@gmail.com"
+          git config --global user.name "Ratpack Student"
+        TestScript: |
+          $email = git config --global user.email
+          $name = git config --global user.name
+          Write-Host "Git user.email: $email; user.name: $name"
+          return ($email -ne $null -and $name -ne $null)
+
+    # FRC Game Tools
+    - resource: PSDscResources/Script
+      id: frc-game-tools
+      dependsOn:
+        - ni-package-manager
+      directives:
+        description: Installs FRC Game Tools from NI
+        securityContext: elevated
+      settings: 
+        GetScript: |
+          # Check whether we can find the FRC Driver Station folder as a proxy for FRC Game Tools being installed
+          $path = 'C:\Program Files (x86)\FRC Driver Station'
+          return @{ Result = Test-Path -Path $path -PathType Container }
+        SetScript: |
+          $onlineInstaller = 'https://download.ni.com/support/nipkg/products/ni-f/ni-frc-2026-game-tools/26.0/online/ni-frc-2026-game-tools_26.0_online.exe'
+          $localInstaller = "${env:TEMP}\frc-game-tools.exe"
+          Write-Host "Downloading FRC Game Tools installer..."
+          Invoke-WebRequest $onlineInstaller -OutFile $localInstaller
+          Write-Host "Running FRC Game Tools installer..."
+          & $localInstaller --passive --prevent-reboot --accept-eulas --hide-splashscreen
+        TestScript: |
+          # Check whether we can find the FRC Driver Station folder as a proxy for FRC Game Tools being installed
+          $path = 'C:\Program Files (x86)\FRC Driver Station'
+          return (Test-Path -Path $path -PathType Container)
+
+      # WPILib Installer
+    - resource: PSDscResources/Script
+      id: wpilib-installer
+      directives:
+        description: Installs WPILib using the official installer
+        securityContext: elevated
+      settings:
+        GetScript: |
+          return @{
+            Result = Test-Path -Path "C:\Users\Public\wpilib\2026" -PathType Container
+          }
+        SetScript: |
+          $onlineInstaller = 'https://packages.wpilib.workers.dev/installer/v2026.1.1-beta-1/Win64/WPILib_Windows-2026.1.1-beta-1.iso'
+          $localIso = "${env:TEMP}\wpilib-installer.iso"
+          Write-Host "Downloading WPILib installer..."
+          Invoke-WebRequest $onlineInstaller -OutFile $localIso
+
+          Write-Host "Extracting ISO contents..."
+          New-Item -Path "${env:TEMP}\wpilib-installer" -ItemType Directory -Force | Out-Null
+          mountvol "W:" (Mount-DiskImage -ImagePath $localIso -NoDriveLetter | Get-Volume).UniqueId
+          Copy-Item -Path "W:\*" -Destination "${env:TEMP}\wpilib-installer" -Recurse -Force
+          Dismount-DiskImage -ImagePath $localIso
+          Write-Host "Running WPILib installer..."
+          & "${env:TEMP}\wpilib-installer\WPILibInstaller.exe" --quiet
+        TestScript: |
+          return (Test-Path -Path "C:\Users\Public\wpilib\2026" -PathType Container)
