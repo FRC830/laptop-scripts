@@ -126,7 +126,7 @@ properties:
             Result = Test-Path -Path "C:\Users\Public\wpilib\2026" -PathType Container
           }
         SetScript: |
-          $onlineInstaller = 'https://packages.wpilib.workers.dev/installer/v2026.1.1-beta-1/Win64/WPILib_Windows-2026.1.1-beta-1.iso'
+          $onlineInstaller = 'https://packages.wpilib.workers.dev/installer/v2026.1.1/Win64/WPILib_Windows-2026.1.1.iso'
           $localIso = "${env:TEMP}\wpilib-installer.iso"
           Write-Host "Downloading WPILib installer..."
           Invoke-WebRequest $onlineInstaller -OutFile $localIso
