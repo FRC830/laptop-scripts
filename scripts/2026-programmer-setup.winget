@@ -9,6 +9,22 @@ properties:
     version: 2026.beta.2026.01.11
 
   resources:
+    # Initial Configuration
+    - resource: PSDscResources/Script
+      id: init
+      directives:
+        description: Downloads the FRC 830 2026 Programmer Setup Manual PDF
+        securityContext: elevated
+      settings:
+        GetScript: |
+          return @{
+            Result = (Test-Path -Path "${env:TEMP}\2026-frc" -PathType Container)
+          }
+        SetScript: |
+          New-Item -ItemType "Directory" -Path "${env:TEMP}\2026-frc" -Force | Out-Null
+        TestScript: |
+          return (Test-Path -Path "${env:TEMP}\2026-frc" -PathType Container)
+
     # Git
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: git
@@ -23,6 +39,8 @@ properties:
     # Note: Not currently available via winget or MS Store, so this is currently manual
     - resource: PSDscResources/Script
       id: rev-hardware-client
+      dependsOn:
+        - init
       directives:
         description: Installs REV Hardware Client
         securityContext: elevated
@@ -131,6 +149,7 @@ properties:
     - resource: PSDscResources/Script
       id: frc-game-tools
       dependsOn:
+        - init
         - ni-package-manager
         - frc-game-tools-uninstall
       directives:
@@ -160,6 +179,8 @@ properties:
       # WPILib Installer
     - resource: PSDscResources/Script
       id: wpilib-installer
+      dependsOn:
+        - init      
       directives:
         description: Installs WPILib using the official installer
         securityContext: elevated
