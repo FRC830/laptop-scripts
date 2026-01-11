@@ -123,7 +123,7 @@ properties:
           Write-Host "Running FRC Game Tools installer..."
           & $localInstaller --passive --prevent-reboot --accept-eulas --hide-splashscreen
         TestScript: |
-          $version = $null
+          $version = $false
           if (Test-Path -Path "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe") {
             $version = (Get-Item "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe").VersionInfo.FileVersion
           }
