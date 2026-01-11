@@ -6,7 +6,7 @@ properties:
   metadata:
     author: Nick McGill (FRC 830 Mentor)
     description: Installs required software for FRC 830 team programmers
-    version: 2026.beta.2026.01.08
+    version: 2026.beta.2026.01.11
 
   resources:
     # Git
@@ -20,14 +20,25 @@ properties:
         source: winget
 
     # Rev Hardware Client
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
+    # Note: Not currently available via winget or MS Store, so this is currently manual
+    - resource: PSDscResources/Script
       id: rev-hardware-client
       directives:
-        description: Installs REV Hardware Client from winget
+        description: Installs REV Hardware Client
         securityContext: elevated
-      settings:
-        id: REVRobotics.REVHardwareClient
-        source: winget
+      settings: 
+        GetScript: |
+          return @{
+            Result = Test-Path -Path "${env:LOCALAPPDATA}\REV Robotics\REV Hardware Client 2" -PathType Container
+          }
+        SetScript: |          
+          $onlineInstaller = 'https://rhc2.revrobotics.com/download/rev-hardware-client.exe'
+          $localInstaller = "${env:TEMP}\rev-hardware-client.exe"
+          Invoke-WebRequest $onlineInstaller -OutFile $localInstaller
+          Write-Host "Running REV Hardware Client installer..."
+          & $localInstaller /S
+        TestScript: |
+          return (Test-Path -Path "${env:LOCALAPPDATA}\REV Robotics\REV Hardware Client 2" -PathType Container)
 
     # Phoenix Tuner X
     - resource: Microsoft.WinGet.DSC/WinGetPackage
@@ -99,9 +110,11 @@ properties:
         securityContext: elevated
       settings: 
         GetScript: |
-          # Check whether we can find the FRC Driver Station folder as a proxy for FRC Game Tools being installed
-          $path = 'C:\Program Files (x86)\FRC Driver Station'
-          return @{ Result = Test-Path -Path $path -PathType Container }
+          $version = $null
+          if (Test-Path -Path "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe") {
+            $version = (Get-Item "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe").VersionInfo.FileVersion
+          }
+          return @{ Result = $version -like '26.*' }
         SetScript: |
           $onlineInstaller = 'https://download.ni.com/support/nipkg/products/ni-f/ni-frc-2026-game-tools/26.0/online/ni-frc-2026-game-tools_26.0_online.exe'
           $localInstaller = "${env:TEMP}\frc-game-tools.exe"
@@ -110,8 +123,8 @@ properties:
           Write-Host "Running FRC Game Tools installer..."
           & $localInstaller --passive --prevent-reboot --accept-eulas --hide-splashscreen
         TestScript: |
-          # Check whether we can find the FRC Driver Station folder as a proxy for FRC Game Tools being installed
-          $path = 'C:\Program Files (x86)\FRC Driver Station'
+          $version = '(Get-Item "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe").VersionInfo.FileVersion'
+          return @{ Result = $version -like '26.*' }
           return (Test-Path -Path $path -PathType Container)
 
       # WPILib Installer
