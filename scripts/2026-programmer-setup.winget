@@ -123,9 +123,11 @@ properties:
           Write-Host "Running FRC Game Tools installer..."
           & $localInstaller --passive --prevent-reboot --accept-eulas --hide-splashscreen
         TestScript: |
-          $version = '(Get-Item "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe").VersionInfo.FileVersion'
-          return @{ Result = $version -like '26.*' }
-          return (Test-Path -Path $path -PathType Container)
+          $version = $null
+          if (Test-Path -Path "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe") {
+            $version = (Get-Item "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe").VersionInfo.FileVersion
+          }
+          return $version -like '26.*'
 
       # WPILib Installer
     - resource: PSDscResources/Script
