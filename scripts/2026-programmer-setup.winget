@@ -16,7 +16,7 @@ properties:
   metadata:
     author: Nick McGill (FRC 830 Mentor)
     description: Installs required software for FRC 830 team programmers
-    version: 2026.beta.2026.01.18
+    version: 2026.01.22
 
   resources:
     # Initial Configuration
@@ -34,6 +34,25 @@ properties:
           New-Item -ItemType "Directory" -Path "${env:TEMP}\2026-frc" -Force | Out-Null
         TestScript: |
           return (Test-Path -Path "${env:TEMP}\2026-frc" -PathType Container)
+
+    # FRC Game Manual
+    - resource: PSDscResources/Script
+      id: frc-game-manual
+      directives:
+        description: Downloads the FRC 830 2026 Programmer Setup Manual PDF
+        securityContext: elevated
+      settings:
+        GetScript: |
+          # Always download the latest version of the manual
+          return @{
+            Result = $false
+          }
+        SetScript: |
+          $onlinePath = 'https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf'
+          $localPath = "C:\Users\Public\Desktop\2026GameManual.pdf"
+          Invoke-WebRequest $onlinePath -OutFile $localPath
+        TestScript: |
+          return (Test-Path -Path "C:\Users\Public\Desktop\2026GameManual.pdf" -PathType Leaf)
 
     # Git
     - resource: Microsoft.WinGet.DSC/WinGetPackage
@@ -114,11 +133,11 @@ properties:
           $localInstaller = "${env:TEMP}\2026-frc\rev-hardware-client.exe"
           Invoke-WebRequest $onlineInstaller -OutFile $localInstaller
           Write-Host "Running REV Hardware Client installer..."
-          Start-Process -FilePath "$localInstaller" /S
+          Start-Process -Passthru -FilePath "$localInstaller" "/S" | Wait-Process
         TestScript: |
           return (Test-Path -Path "${env:LOCALAPPDATA}\REV Robotics\REV Hardware Client 2" -PathType Container)
 
-    # FRC Game Tools - Uninstall 2025 if present
+    # FRC Game Tools - Uninstall NI if 2025 Present
     - resource: PSDscResources/Script
       id: frc-game-tools-uninstall
       directives:
@@ -132,9 +151,12 @@ properties:
           }
           return @{ Result = $version -like '25.*' }
         SetScript: |
-          Write-Host "NI Package Manager is required for FRC Game Tools. Please install it first."
-          if (Test-Path -Path "{env:PROGRAMFILES}\National Instruments\NI Package Manager\nipkg.exe") {
-            Start-Process -FilePath "{env:PROGRAMFILES}\National Instruments\NI Package Manager\nipkg.exe" remove ni-frc-2025-game-tools --allow-uninstall --yes
+          if (Test-Path -Path "${env:PROGRAMFILES}\National Instruments\NI Package Manager\nipkg.exe") {
+            $args = "remove ni-frc-2025-game-tools --allow-uninstall --yes"
+            Start-Process -Passthru -FilePath "${env:PROGRAMFILES}\National Instruments\NI Package Manager\nipkg.exe" -ArgumentList $args | Wait-Process
+          } elseif (Test-Path -Path "${env:PROGRAMFILES(x86)}\National Instruments\Shared\NIUninstaller\uninst.exe") {
+            $args = '/qb /x all'
+            Start-Process -Passthru -FilePath "${env:PROGRAMFILES(x86)}\National Instruments\Shared\NIUninstaller\uninst.exe" -ArgumentList $args | Wait-Process
           }
         TestScript: |
           $version = $null
@@ -165,7 +187,7 @@ properties:
           Write-Host "Downloading FRC Game Tools installer..."
           Invoke-WebRequest $onlineInstaller -OutFile $localInstaller
           Write-Host "Running FRC Game Tools installer..."
-          & $localInstaller --passive --prevent-reboot --accept-eulas --hide-splashscreen
+          Start-Process -Passthru -FilePath $localInstaller "--passive --prevent-reboot --accept-eulas --hide-splashscreen" | Wait-Process
         TestScript: |
           $version = $null
           if (Test-Path -Path "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe") {
@@ -173,7 +195,7 @@ properties:
           }
           return $version -like '26.*'
 
-      # WPILib Installer
+      # WPILib Installer - Requries Manual User Interaction
     - resource: PSDscResources/Script
       id: wpilib-installer
       dependsOn:
@@ -198,25 +220,6 @@ properties:
           Copy-Item -Path "W:\*" -Destination "${env:TEMP}\2026-frc\wpilib-installer" -Recurse -Force
           Dismount-DiskImage -ImagePath $localIso
           Write-Host "Running WPILib installer..."
-          & "${env:TEMP}\2026-frc\wpilib-installer\WPILibInstaller.exe" --quiet
+          Start-Process -Passthru -FilePath "${env:TEMP}\2026-frc\wpilib-installer\WPILibInstaller.exe" | Wait-Process
         TestScript: |
           return (Test-Path -Path "C:\Users\Public\wpilib\2026" -PathType Container)
-
-    # Download FRC Game Manual
-    - resource: PSDscResources/Script
-      id: frc-game-manual
-      directives:
-        description: Downloads the FRC 830 2026 Programmer Setup Manual PDF
-        securityContext: elevated
-      settings:
-        GetScript: |
-          # Always download the latest version of the manual
-          return @{
-            Result = $false
-          }
-        SetScript: |
-          $onlinePath = 'https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf'
-          $localPath = "C:\Users\Public\Desktop\2026GameManual.pdf"
-          Invoke-WebRequest $onlinePath -OutFile $localPath
-        TestScript: |
-          return (Test-Path -Path "C:\Users\Public\Desktop\2026GameManual.pdf" -PathType Leaf)
