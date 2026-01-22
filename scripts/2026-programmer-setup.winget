@@ -1,19 +1,29 @@
 # yaml-language-server: $schema=https://aka.ms/configuration-dsc-schema/0.2
 
+# Offline Installers and Sources:
+# Git: https://github.com/git-for-windows/git/releases/download/v2.52.0.windows.1/Git-2.52.0-64-bit.exe
+# Phoenix Tuner X: https://apps.microsoft.com/detail/9NVV4PWDW27Z
+# PathPlanner: https://github.com/mjansen4857/pathplanner/releases/latest
+# Pi Imager: https://github.com/raspberrypi/rpi-imager/releases/latest
+# REV Hardware Client 2: https://rhc2.revrobotics.com/download/rev-hardware-client-1.0.2.x64.msix
+# FRC Game Tools: https://download.ni.com/support/nipkg/products/ni-f/ni-frc-2026-game-tools/26.0/offline/ni-frc-2026-game-tools_26.0.0_offline.iso
+# WPILib: https://github.com/wpilibsuite/allwpilib/releases/latest
+# Manual: https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf
+
 # Requires Microsoft VC Redist 2015+ x64: winget install --id Microsoft.VCRedist.2015+.x64 -e
 properties:
   configurationVersion: 0.2
   metadata:
     author: Nick McGill (FRC 830 Mentor)
     description: Installs required software for FRC 830 team programmers
-    version: 2026.beta.2026.01.11
+    version: 2026.01.22
 
   resources:
     # Initial Configuration
     - resource: PSDscResources/Script
       id: init
       directives:
-        description: Downloads the FRC 830 2026 Programmer Setup Manual PDF
+        description: Creates the 2026-frc directory in $TEMP
         securityContext: elevated
       settings:
         GetScript: |
@@ -25,6 +35,25 @@ properties:
         TestScript: |
           return (Test-Path -Path "${env:TEMP}\2026-frc" -PathType Container)
 
+    # FRC Game Manual
+    - resource: PSDscResources/Script
+      id: frc-game-manual
+      directives:
+        description: Downloads the FRC 830 2026 Programmer Setup Manual PDF
+        securityContext: elevated
+      settings:
+        GetScript: |
+          # Always download the latest version of the manual
+          return @{
+            Result = $false
+          }
+        SetScript: |
+          $onlinePath = 'https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf'
+          $localPath = "C:\Users\Public\Desktop\2026GameManual.pdf"
+          Invoke-WebRequest $onlinePath -OutFile $localPath
+        TestScript: |
+          return (Test-Path -Path "C:\Users\Public\Desktop\2026GameManual.pdf" -PathType Leaf)
+
     # Git
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: git
@@ -34,29 +63,6 @@ properties:
       settings:
         id: Git.Git
         source: winget
-
-    # Rev Hardware Client
-    # Note: Not currently available via winget or MS Store, so this is currently manual
-    - resource: PSDscResources/Script
-      id: rev-hardware-client
-      dependsOn:
-        - init
-      directives:
-        description: Installs REV Hardware Client
-        securityContext: elevated
-      settings: 
-        GetScript: |
-          return @{
-            Result = Test-Path -Path "${env:LOCALAPPDATA}\REV Robotics\REV Hardware Client 2" -PathType Container
-          }
-        SetScript: |          
-          $onlineInstaller = 'https://rhc2.revrobotics.com/download/rev-hardware-client.exe'
-          $localInstaller = "${env:TEMP}\2026-frc\rev-hardware-client.exe"
-          Invoke-WebRequest $onlineInstaller -OutFile $localInstaller
-          Write-Host "Running REV Hardware Client installer..."
-          & $localInstaller /S
-        TestScript: |
-          return (Test-Path -Path "${env:LOCALAPPDATA}\REV Robotics\REV Hardware Client 2" -PathType Container)
 
     # Phoenix Tuner X
     - resource: Microsoft.WinGet.DSC/WinGetPackage
@@ -86,16 +92,6 @@ properties:
         id: RaspberryPiFoundation.RaspberryPiImager
         source: winget
 
-    # NI Package Manager
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      id: ni-package-manager
-      directives:
-        description: Installs NI Package Manager from winget
-        securityContext: elevated
-      settings:
-        id: NI.ni-packagemanager
-        source: winget
-
     # Git Config
     - resource: PSDscResources/Script
       id: git-config
@@ -118,11 +114,32 @@ properties:
           Write-Host "Git user.email: $email; user.name: $name"
           return ($email -ne $null -and $name -ne $null)
 
-    # FRC Game Tools - Uninstall 2025 if present
+    # Rev Hardware Client
+    # Note: Not currently available via winget or MS Store, so this is currently manual
+    - resource: PSDscResources/Script
+      id: rev-hardware-client
+      dependsOn:
+        - init
+      directives:
+        description: Installs REV Hardware Client
+        securityContext: elevated
+      settings: 
+        GetScript: |
+          return @{
+            Result = Test-Path -Path "${env:LOCALAPPDATA}\REV Robotics\REV Hardware Client 2" -PathType Container
+          }
+        SetScript: |          
+          $onlineInstaller = 'https://rhc2.revrobotics.com/download/rev-hardware-client.exe'
+          $localInstaller = "${env:TEMP}\2026-frc\rev-hardware-client.exe"
+          Invoke-WebRequest $onlineInstaller -OutFile $localInstaller
+          Write-Host "Running REV Hardware Client installer..."
+          Start-Process -Passthru -FilePath "$localInstaller" "/S" | Wait-Process
+        TestScript: |
+          return (Test-Path -Path "${env:LOCALAPPDATA}\REV Robotics\REV Hardware Client 2" -PathType Container)
+
+    # FRC Game Tools - Uninstall NI if 2025 Present
     - resource: PSDscResources/Script
       id: frc-game-tools-uninstall
-      dependsOn:
-        - ni-package-manager
       directives:
         description: Attempts to uninstall any existing FRC Game Tools installation
         securityContext: elevated
@@ -134,9 +151,12 @@ properties:
           }
           return @{ Result = $version -like '25.*' }
         SetScript: |
-          Write-Host "NI Package Manager is required for FRC Game Tools. Please install it first."
-          if (Test-Path -Path "{env:PROGRAMFILES}\National Instruments\NI Package Manager\nipkg.exe") {
-            ./nipkg.exe remove ni-frc-2025-game-tools --allow-uninstall --yes
+          if (Test-Path -Path "${env:PROGRAMFILES}\National Instruments\NI Package Manager\nipkg.exe") {
+            $args = "remove ni-frc-2025-game-tools --allow-uninstall --yes"
+            Start-Process -Passthru -FilePath "${env:PROGRAMFILES}\National Instruments\NI Package Manager\nipkg.exe" -ArgumentList $args | Wait-Process
+          } elseif (Test-Path -Path "${env:PROGRAMFILES(x86)}\National Instruments\Shared\NIUninstaller\uninst.exe") {
+            $args = '/qb /x all'
+            Start-Process -Passthru -FilePath "${env:PROGRAMFILES(x86)}\National Instruments\Shared\NIUninstaller\uninst.exe" -ArgumentList $args | Wait-Process
           }
         TestScript: |
           $version = $null
@@ -150,7 +170,6 @@ properties:
       id: frc-game-tools
       dependsOn:
         - init
-        - ni-package-manager
         - frc-game-tools-uninstall
       directives:
         description: Installs FRC Game Tools from NI
@@ -168,7 +187,7 @@ properties:
           Write-Host "Downloading FRC Game Tools installer..."
           Invoke-WebRequest $onlineInstaller -OutFile $localInstaller
           Write-Host "Running FRC Game Tools installer..."
-          & $localInstaller --passive --prevent-reboot --accept-eulas --hide-splashscreen
+          Start-Process -Passthru -FilePath $localInstaller "--passive --prevent-reboot --accept-eulas --hide-splashscreen" | Wait-Process
         TestScript: |
           $version = $null
           if (Test-Path -Path "${env:PROGRAMFILES(x86)}\FRC Driver Station\DriverStation.exe") {
@@ -176,7 +195,7 @@ properties:
           }
           return $version -like '26.*'
 
-      # WPILib Installer
+      # WPILib Installer - Requries Manual User Interaction
     - resource: PSDscResources/Script
       id: wpilib-installer
       dependsOn:
@@ -201,25 +220,6 @@ properties:
           Copy-Item -Path "W:\*" -Destination "${env:TEMP}\2026-frc\wpilib-installer" -Recurse -Force
           Dismount-DiskImage -ImagePath $localIso
           Write-Host "Running WPILib installer..."
-          & "${env:TEMP}\2026-frc\wpilib-installer\WPILibInstaller.exe" --quiet
+          Start-Process -Passthru -FilePath "${env:TEMP}\2026-frc\wpilib-installer\WPILibInstaller.exe" | Wait-Process
         TestScript: |
           return (Test-Path -Path "C:\Users\Public\wpilib\2026" -PathType Container)
-
-    # Download FRC Game Manual
-    - resource: PSDscResources/Script
-      id: frc-game-manual
-      directives:
-        description: Downloads the FRC 830 2026 Programmer Setup Manual PDF
-        securityContext: elevated
-      settings:
-        GetScript: |
-          # Always download the latest version of the manual
-          return @{
-            Result = $false
-          }
-        SetScript: |
-          $onlinePath = 'https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf'
-          $localPath = "C:\Users\Public\Desktop\2026GameManual.pdf"
-          Invoke-WebRequest $onlinePath -OutFile $localPath
-        TestScript: |
-          return (Test-Path -Path "C:\Users\Public\Desktop\2026GameManual.pdf" -PathType Leaf)
