@@ -11,12 +11,19 @@
 # Manual: https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf
 
 # Requires Microsoft VC Redist 2015+ x64: winget install --id Microsoft.VCRedist.2015+.x64 -e
+# Optional environment variables for temporary overrides on shared laptops:
+#   $env:GIT_USER_NAME = "Student Name"
+#   $env:GIT_USER_EMAIL = "student@example.org"
+#   $env:GITHUB_USER_NAME = "Student Name"
+#   $env:GITHUB_USER_EMAIL = "student@example.org"
+# If unset, the script falls back to the team defaults below.
+# Update the defaults below to match your team before running this script in a new environment.
 properties:
   configurationVersion: 0.2
   metadata:
     author: Nick McGill (FRC 830 Mentor)
-    description: Installs required software for FRC 830 team programmers
-    version: 2026.01.22
+    description: Installs required software for a high-school robotics team
+    version: 2026.10.10
 
   resources:
     # Initial Configuration
@@ -64,6 +71,16 @@ properties:
         id: Git.Git
         source: winget
 
+    # GitHub CLI
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: github-cli
+      directives:
+        description: Installs GitHub CLI (gh) for temporary student GitHub authentication
+        securityContext: elevated
+      settings:
+        id: GitHub.cli
+        source: winget
+
     # Phoenix Tuner X
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: phoenix-tuner
@@ -98,21 +115,45 @@ properties:
       dependsOn:
         - git
       directives:
-        description: Configures Git with placeholder user name and email for FRC 830
+        description: Configures Git with the team-appropriate user name and email
         securityContext: elevated
       settings:
         GetScript: |
-          return @{
-            Result = (git config --global user.email) -ne $null
-          }
+          $teamUserName = $env:GIT_USER_NAME
+          if ([string]::IsNullOrWhiteSpace($teamUserName)) { $teamUserName = $env:GITHUB_USER_NAME }
+          if ([string]::IsNullOrWhiteSpace($teamUserName)) { $teamUserName = "Ratpack Student" }
+
+          $teamUserEmail = $env:GIT_USER_EMAIL
+          if ([string]::IsNullOrWhiteSpace($teamUserEmail)) { $teamUserEmail = $env:GITHUB_USER_EMAIL }
+          if ([string]::IsNullOrWhiteSpace($teamUserEmail)) { $teamUserEmail = "ratpack.student@gmail.com" }
+
+          $email = git config --global user.email
+          $name = git config --global user.name
+          return @{ Result = ($email -eq $teamUserEmail -and $name -eq $teamUserName) }
         SetScript: |
-          git config --global user.email "ratpack.student@gmail.com"
-          git config --global user.name "Ratpack Student"
+          $teamUserName = $env:GIT_USER_NAME
+          if ([string]::IsNullOrWhiteSpace($teamUserName)) { $teamUserName = $env:GITHUB_USER_NAME }
+          if ([string]::IsNullOrWhiteSpace($teamUserName)) { $teamUserName = "Ratpack Student" }
+
+          $teamUserEmail = $env:GIT_USER_EMAIL
+          if ([string]::IsNullOrWhiteSpace($teamUserEmail)) { $teamUserEmail = $env:GITHUB_USER_EMAIL }
+          if ([string]::IsNullOrWhiteSpace($teamUserEmail)) { $teamUserEmail = "ratpack.student@gmail.com" }
+
+          git config --global user.email $teamUserEmail
+          git config --global user.name $teamUserName
         TestScript: |
+          $teamUserName = $env:GIT_USER_NAME
+          if ([string]::IsNullOrWhiteSpace($teamUserName)) { $teamUserName = $env:GITHUB_USER_NAME }
+          if ([string]::IsNullOrWhiteSpace($teamUserName)) { $teamUserName = "Ratpack Student" }
+
+          $teamUserEmail = $env:GIT_USER_EMAIL
+          if ([string]::IsNullOrWhiteSpace($teamUserEmail)) { $teamUserEmail = $env:GITHUB_USER_EMAIL }
+          if ([string]::IsNullOrWhiteSpace($teamUserEmail)) { $teamUserEmail = "ratpack.student@gmail.com" }
+
           $email = git config --global user.email
           $name = git config --global user.name
           Write-Host "Git user.email: $email; user.name: $name"
-          return ($email -ne $null -and $name -ne $null)
+          return ($email -eq $teamUserEmail -and $name -eq $teamUserName)
 
     # Rev Hardware Client
     # Note: Not currently available via winget or MS Store, so this is currently manual

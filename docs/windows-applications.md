@@ -1,6 +1,6 @@
-# FRC Team 830 Windows Applications
+# FRC Team Windows Applications
 
-This guide provides instructions to install specialty FRC tools for **Windows** computers.  Most of these tools are *only available for the Windows operating system*.
+This guide provides instructions to install specialty FRC tools for **Windows** computers used by a high-school robotics team. Most of these tools are *only available for the Windows operating system*.
 
 Each command must be run in a PowerShell terminal.  You may need to click *Accept* or *Okay* on a security pop-up.
 
